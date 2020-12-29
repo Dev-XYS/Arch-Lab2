@@ -13,10 +13,11 @@
 
 ; Get the computation table for a statement (e.g. for loop, assignment, etc.).
 (define (get-table-from-stmt env stmt)
-  (cond ((assign? stmt) (get-table-from-assignment env stmt))
-        ((for? stmt) (get-table-from-for env stmt))
-        ((parallel-for? stmt (get-table-from-parallel-for env stmt)))
-        (else '())))
+  (let [(stmt (map (lambda (name) (get-value-from-env env name)) stmt))]
+    (cond ((assign? stmt) (get-table-from-assignment env stmt))
+          ((for? stmt) (get-table-from-for env stmt))
+          ((parallel-for? stmt (get-table-from-parallel-for env stmt)))
+          (else '()))))
 
 (define (get-table-from-assignment env asgmt)
   (let [(asgmt (deep-map (lambda (name) (get-value-from-env env name)) asgmt))]
@@ -162,14 +163,28 @@
 
 ;; Tests
 
+; Single assignment.
 (get-table-from-program
  '(assign a (+ a b)))
 
+; Single loop.
 (get-table-from-program
  '(for i 0 16 2
     (assign (ref O (i)) (+ (ref I (i)) i))))
 
+; Nested loop.
 (get-table-from-program
  '(for i 0 16 4
     (for j 0 4 1
       (assign (O (i j)) (+ (O (i j)) (I (j i)))))))
+
+; Empty loop.
+(get-table-from-program
+ '(for i 0 0 1
+    (assign o i)))
+
+; Nested loop with index dependence.
+(get-table-from-program
+ '(for i 0 8 1
+    (for j 0 i 1
+      (assign (O (i j)) (I (i j))))))
