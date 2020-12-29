@@ -15,7 +15,7 @@
     (cond ((assign? stmt) (get-table-from-assignment env stmt))
           ((let? stmt) (get-table-from-let env stmt))
           ((for? stmt) (get-table-from-for env stmt))
-          ((parallel-for? stmt (get-table-from-parallel-for env stmt)))
+          ((parallel-for? stmt) (get-table-from-parallel-for env stmt))
           (else '()))))
 
 ; Get computation table for an assignment.
@@ -23,9 +23,11 @@
 ; parsing its sub-structures.
 (define (get-table-from-assignment env asgmt)
   (let [(asgmt (deep-map (lambda (name) (get-value-from-env env name)) asgmt))]
-    (list (make-cell (get-read-list-from-expr (@assignor asgmt))
-                     (singleton (@assignee asgmt))
-                     (get-computation-from-expr (@assignor asgmt))))))
+    (list #|for the whole list|#
+     (list #|for concurrency|#
+      (make-cell (get-read-list-from-expr (@assignor asgmt))
+                 (singleton (@assignee asgmt))
+                 (get-computation-from-expr (@assignor asgmt)))))))
 
 ; Get computation table for a let statement.
 ; Syntax of 'let':
@@ -40,9 +42,8 @@
     (add-binding-to-env env name value)
     (get-table-from-stmt env body)))
 
-; Get computation table for a for loop.
-; Important: env is callee-saved.
-(define (get-table-from-for _env for-stmt)
+; Universal logic for processing for loop (sequential and parallel).
+(define (universal-for-helper _env for-stmt fold-func)
   (define env (hash-copy _env))
   (let [(base (@base for-stmt))
         (limit (@limit for-stmt))
@@ -53,16 +54,24 @@
           '()
           (begin
             (add-binding-to-env env (@index for-stmt) ind)
-            (append (get-table-from-stmt
+            (fold-func (get-table-from-stmt
                      env
                      body)
                     (for-helper (+ ind step))))))
     (for-helper base)))
 
+; Get computation table for a for loop.
+; Important: env is callee-saved.
+(define (get-table-from-for _env for-stmt)
+  (universal-for-helper _env for-stmt append))
+
 ; Get computation table for a parallel loop.
 ; (Not implemented yet.)
-(define (get-table-from-parallel-for env pfor-stmt)
-  '())
+(define (get-table-from-parallel-for _env pfor-stmt)
+  (universal-for-helper
+   _env pfor-stmt
+   (lambda (table1 table2)
+     (zip-map append table1 table2))))
 
 ; Evaluate an expression (required to contain only bound variables).
 (define (eval-expr env expr)
@@ -203,6 +212,12 @@
     ((list? x) (cons (deep-map f (car x)) (deep-map f (cdr x))))
     (else (f x))))
 
+(define (zip-map f x y)
+  (cond
+    ((null? x) y)
+    ((null? y) x)
+    (else (cons (f (car x) (car y)) (zip-map f (cdr x) (cdr y))))))
+
 ;; Tests
 
 (define get get-table-from-program)
@@ -239,3 +254,15 @@
     (let step 2
       (for i 0 limit step
         (assign (O i) (I i))))))
+
+; Parallel for.
+(get
+ '(for i 0 4 1
+    (parallel-for j 0 4 1
+      (assign (O (i j)) (I (i j))))))
+
+; Parallel for inversed.
+(get
+ '(parallel-for i 0 4 1
+    (for j 0 4 1
+      (assign (O (i j)) (I (i j))))))
