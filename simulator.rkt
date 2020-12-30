@@ -55,9 +55,9 @@
           (begin
             (add-binding-to-env env (@index for-stmt) ind)
             (fold-func (get-table-from-stmt
-                     env
-                     body)
-                    (for-helper (+ ind step))))))
+                        env
+                        body)
+                       (for-helper (+ ind step))))))
     (for-helper base)))
 
 ; Get computation table for a for loop.
@@ -164,7 +164,7 @@
 
 ; Check if the expression is multiplication.
 (define (*? expr)
-  (and (list? expr) (eq? (car expr) '+)))
+  (and (list? expr) (eq? (car expr) '*)))
 ; Get the augend.
 (define @*fst cadr)
 ; Get the addend.
@@ -254,6 +254,12 @@
     (let step 2
       (for i 0 limit step
         (assign (O i) (I i))))))
+
+; Let with simple calculation.
+(get
+ '(for i 0 16 2
+    (let ind (* i i)
+      (assign (O ind) (I ind)))))
 
 ; Parallel for.
 (get
