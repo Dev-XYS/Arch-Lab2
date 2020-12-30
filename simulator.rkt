@@ -83,9 +83,22 @@
     (else (error "Expression cannot be evaluated."))))
 
 ; Get computation list for an expression.
-; For now we assume expressions use only MAC.
+; If the computation pattern is a multiplication and then an addition (in that
+; order), we denote it as 'MAC'. Otherwise, the operations are stored in a list.
 (define (get-computation-from-expr expr)
-  '(MAC))
+  (define (helper expr)
+    (cond
+      ((+? expr) (append (get-computation-from-expr (@+fst expr))
+                         (get-computation-from-expr (@+snd expr))
+                         '(+)))
+      ((*? expr) (append (get-computation-from-expr (@*fst expr))
+                         (get-computation-from-expr (@*snd expr))
+                         '(*)))
+      (else '())))
+  (let [(computation (helper expr))]
+    (if (equal? computation '(* +))
+        '(MAC)
+        computation)))
 
 ; Get read list of an expression.
 (define (get-read-list-from-expr expr)
@@ -272,3 +285,8 @@
  '(parallel-for i 0 4 1
     (for j 0 4 1
       (assign (O (i j)) (I (i j))))))
+
+; Compuation using MAC.
+(get
+ '(for i 0 4 1
+    (assign (O i) (+ (O i) (* (I i) (I i))))))
