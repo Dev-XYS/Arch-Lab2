@@ -1,9 +1,17 @@
 #lang racket
 
-;; A program is like
+; A program is like
 #;(for i 0 16 1
     (for j 0 16 1
       (assign (O i j) (I i j))))
+
+;; Context free grammar of output:
+
+; Table ->
+#;(@global-buffer Table)
+#;(@register-file Table)
+#;(parallel (Table*))
+#;(sequential (Table*))
 
 ; The main simulator procedure.
 (define (get-table-from-program prog)
@@ -16,6 +24,8 @@
           ((let? stmt) (get-table-from-let env stmt))
           ((for? stmt) (get-table-from-for env stmt))
           ((parallel-for? stmt) (get-table-from-parallel-for env stmt))
+          ((@global-buffer? stmt) (get-table-from-@global-buffer env stmt))
+          ((@register-file? stmt) (get-table-from-@register-file env stmt))
           (else '()))))
 
 ; Get computation table for an assignment.
@@ -23,11 +33,10 @@
 ; parsing its sub-structures.
 (define (get-table-from-assignment env asgmt)
   (let [(asgmt (deep-map (lambda (name) (get-value-from-env env name)) asgmt))]
-    (list #|for the whole list|#
-     (list #|for concurrency|#
-      (make-cell (get-read-list-from-expr (@assignor asgmt))
-                 (singleton (@assignee asgmt))
-                 (get-computation-from-expr (@assignor asgmt)))))))
+    (make-sequential-singleton #|for the whole list (which is sequential)|#
+     (make-cell (get-read-list-from-expr (@assignor asgmt))
+                (singleton (@assignee asgmt))
+                (get-computation-from-expr (@assignor asgmt))))))
 
 ; Get computation table for a let statement.
 ; Syntax of 'let':
@@ -63,15 +72,40 @@
 ; Get computation table for a for loop.
 ; Important: env is callee-saved.
 (define (get-table-from-for _env for-stmt)
-  (universal-for-helper _env for-stmt append))
+  (define (unfold-sequential tab-list)
+    (if (null? tab-list)
+        '()
+        (let [(first (car tab-list))]
+          (if (tab-annot-sequential? first)
+              (append
+               (@tab-annot-body first)
+               (unfold-sequential (cdr tab-list)))
+              (cons first (unfold-sequential (cdr tab-list)))))))
+  (make-sequential
+   (unfold-sequential (universal-for-helper _env for-stmt cons))))
 
 ; Get computation table for a parallel loop.
 ; (Not implemented yet.)
 (define (get-table-from-parallel-for _env pfor-stmt)
-  (universal-for-helper
-   _env pfor-stmt
-   (lambda (table1 table2)
-     (zip-map append table1 table2))))
+  (define (unfold-parallel tab-list)
+    (if (null? tab-list)
+        '()
+        (let [(first (car tab-list))]
+          (if (tab-annot-parallel? first)
+              (append
+               (@tab-annot-body first)
+               (unfold-parallel (cdr tab-list)))
+              (cons first (unfold-parallel (cdr tab-list)))))))
+  (make-parallel
+   (unfold-parallel (universal-for-helper _env pfor-stmt cons))))
+
+; Get computation table for @global-buffer annotation.
+(define (get-table-from-@global-buffer env stmt)
+   `(@global-buffer ,(get-table-from-stmt env (@annot-body stmt))))
+
+; Get computation table for @register-file annotation.
+(define (get-table-from-@register-file env stmt)
+   `(@register-file ,(get-table-from-stmt env (@annot-body stmt))))
 
 ; Evaluate an expression (required to contain only bound variables).
 (define (eval-expr env expr)
@@ -132,12 +166,19 @@
 ; Check if a statement is a let.
 (define (let? stmt)
   (and (list? stmt) (eq? (car stmt) 'let)))
-; Check if a statement if a for loop.
+; Check if a statement is a for loop.
 (define (for? stmt)
   (and (list? stmt) (eq? (car stmt) 'for)))
-; Check if a statement if a parallel for loop.
+; Check if a statement is a parallel for loop.
 (define (parallel-for? stmt)
   (and (list? stmt) (eq? (car stmt) 'parallel-for)))
+
+; Check if a statement is a @global-buffer annotation.
+(define (@global-buffer? stmt)
+  (and (list? stmt) (eq? (car stmt) '@global-buffer)))
+; Check if a statement is a @register-file annotation.
+(define (@register-file? stmt)
+  (and (list? stmt) (eq? (car stmt) '@register-file)))
 
 ;; Utility functions for manipulating for loops.
 
@@ -183,6 +224,11 @@
 ; Get the addend.
 (define @*snd caddr)
 
+;; Utility functions for annotations.
+
+; Get the body of an annotation.
+(define @annot-body cadr)
+
 ; Check if an expression is a value (e.g. constant integers).
 ; If an expression is a value, it will not be added to read list.
 ; For now we assume that values can only be integers.
@@ -210,12 +256,27 @@
 
 ;; Functions for manipulating tables and cells.
 
+(define (make-sequential tab-list)
+  (list 'sequential tab-list))
+(define (make-parallel tab-list)
+  (list 'parallel tab-list))
+
+(define (make-sequential-singleton table)
+  (make-sequential (list table)))
+
 (define singleton list)
 (define make-cell list)
 
 (define @read car)
 (define @write cadr)
 (define @computation caddr)
+
+(define (tab-annot-sequential? table)
+  (and (list? table) (eq? (car table) 'sequential)))
+(define (tab-annot-parallel? table)
+  (and (list? table) (eq? (car table) 'parallel)))
+
+(define @tab-annot-body cadr)
 
 ;; Miscellaneous functions.
 
@@ -257,7 +318,7 @@
 
 ; Nested loop with index dependence.
 (get
- '(for i 0 8 1
+ '(for i 0 4 1
     (for j 0 i 1
       (assign (O (i j)) (I (i j))))))
 
@@ -290,3 +351,34 @@
 (get
  '(for i 0 4 1
     (assign (O i) (+ (O i) (* (I i) (I i))))))
+
+; Very simple annotation.
+(get
+ '(for i 0 2 1
+    (@global-buffer
+     (assign (O i) (I i)))))
+
+; Program with annotation.
+(get
+ '(@global-buffer
+   (for i 0 4 1
+     (@register-file
+      (assign (O i) (+ (O i) (* (I i) (I i))))))))
+
+; More complex program with annotation.
+(get
+ '(for i 0 2 1
+    (@global-buffer
+     (parallel-for j 0 2 1
+       (@register-file
+        (for k 0 2 1
+          (assign (O i) (+ (O i) (* (I j) (I k))))))))))
+
+; Program with multiple parallel-for and annotation.
+(get
+ '(for i 0 2 1
+    (@global-buffer
+     (parallel-for j 0 2 1
+       (parallel-for k 0 2 1
+         (@register-file
+          (assign (O i) (+ (O i) (* (I j) (I k))))))))))
