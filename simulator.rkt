@@ -12,6 +12,10 @@
 #;(@register-file Table)
 #;(parallel (Table*))
 #;(sequential (Table*))
+#;(sequential (Access*))
+
+; Access ->
+#;((Read*) (Write*) (Computation*))
 
 ; The main simulator procedure.
 (define (get-table-from-program prog)
@@ -292,93 +296,17 @@
     ((null? y) x)
     (else (cons (f (car x) (car y)) (zip-map f (cdr x) (cdr y))))))
 
-;; Tests
+;; Module.
+
+(provide get-table-from-program)
+
+;; Tests.
 
 (define get get-table-from-program)
 
-; Single assignment.
-(get
- '(assign a (+ a b)))
+; Uncomment this to enable tests:
+#;(begin
 
-; Single loop.
-(get
- '(for i 0 16 2
-    (assign (ref O (i)) (+ (ref I (i)) i))))
+; Testcases are moved out.
 
-; Nested loop.
-(get
- '(for i 0 16 4
-    (for j 0 4 1
-      (assign (O (i j)) (+ (O (i j)) (I (j i)))))))
-
-; Empty loop.
-(get
- '(for i 0 0 1
-    (assign o i)))
-
-; Nested loop with index dependence.
-(get
- '(for i 0 4 1
-    (for j 0 i 1
-      (assign (O (i j)) (I (i j))))))
-
-; Let.
-(get
- '(let limit 10
-    (let step 2
-      (for i 0 limit step
-        (assign (O i) (I i))))))
-
-; Let with simple calculation.
-(get
- '(for i 0 16 2
-    (let ind (* i i)
-      (assign (O ind) (I ind)))))
-
-; Parallel for.
-(get
- '(for i 0 4 1
-    (parallel-for j 0 4 1
-      (assign (O (i j)) (I (i j))))))
-
-; Parallel for inversed.
-(get
- '(parallel-for i 0 4 1
-    (for j 0 4 1
-      (assign (O (i j)) (I (i j))))))
-
-; Compuation using MAC.
-(get
- '(for i 0 4 1
-    (assign (O i) (+ (O i) (* (I i) (I i))))))
-
-; Very simple annotation.
-(get
- '(for i 0 2 1
-    (@global-buffer
-     (assign (O i) (I i)))))
-
-; Program with annotation.
-(get
- '(@global-buffer
-   (for i 0 4 1
-     (@register-file
-      (assign (O i) (+ (O i) (* (I i) (I i))))))))
-
-; More complex program with annotation.
-(get
- '(for i 0 2 1
-    (@global-buffer
-     (parallel-for j 0 2 1
-       (@register-file
-        (for k 0 2 1
-          (assign (O i) (+ (O i) (* (I j) (I k))))))))))
-
-; Program with multiple parallel-for and annotation.
-(get
- '(for i 0 2 1
-    (@global-buffer
-     (parallel-for j 0 2 1
-       (parallel-for k 0 2 1
-         (@register-file
-          (assign (O i) (+ (O i) (* (I j) (I k))))))))))
+) ; End of tests.
