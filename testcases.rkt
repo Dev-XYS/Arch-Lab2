@@ -87,4 +87,18 @@
          (@register-file
           (assign (O i) (+ (O i) (* (I j) (I k))))))))))
 
+(define real-convolution1
+  '(for ox_0 0 4 1
+     (for oy_0 0 4 1
+       (@global-buffer
+        (parallel-for ox_1 0 4 1
+          (parallel-for oy_1 0 4 1
+            (for ic 0 3 1
+              (for wx 0 3 1
+                (for wy 0 3 1
+                  (let ix (+ (+ (* ox_0 4) ox_1) wx)
+                    (let iy (+ (+ (* oy_0 4) oy_1) wy)
+                      (@register-file
+                       (assign (O ix iy) (+ (O ix iy) (* (I ic ix iy) (W ic wx wy))))))))))))))))
+
 (provide (all-defined-out))

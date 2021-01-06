@@ -302,11 +302,6 @@
 
 ;; Tests.
 
+(require "testcases.rkt")
+
 (define get get-table-from-program)
-
-; Uncomment this to enable tests:
-#;(begin
-
-; Testcases are moved out.
-
-) ; End of tests.

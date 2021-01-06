@@ -2,6 +2,10 @@
 
 (require racket/hash)
 
+;; Hardware configuration.
+
+(define $energy-MAC 0.075)
+
 ; All 'analyze-*' procedures have a return value of format
 #;(data cycles global-buffer-size register-file-size)
 
@@ -33,15 +37,15 @@
 (define (analyze-parallel table)
   (universal-loop-helper
    (@body table)
-   (get-fold-func hash-force-union max max max)
-   (make-result empty-data 0 0 0)))
+   (get-fold-func hash-force-union max max max +)
+   (make-result empty-data 0 0 0 0)))
 
-; Analyze a table with parallel computation.
+; Analyze a table with sequential computation.
 (define (analyze-sequential table)
   (universal-loop-helper
    (@body table)
-   (get-fold-func hash-force-union + max max)
-   (make-result empty-data 0 0 0)))
+   (get-fold-func hash-force-union + max max +)
+   (make-result empty-data 0 0 0 0)))
 
 ; Process a list of tables using a fold function.
 (define (universal-loop-helper tables fold-func id)
@@ -52,7 +56,12 @@
        (universal-loop-helper (cdr tables) fold-func id))))
 
 ; Get a lambda from fold functions of the four dimensions.
-(define (get-fold-func data-fold cycles-fold buf-size-fold reg-size-fold)
+(define (get-fold-func
+         data-fold
+         cycles-fold
+         buf-size-fold
+         reg-size-fold
+         energy-fold)
   (lambda (result1 result2)
     (make-result
      (data-fold (@result-data result1) (@result-data result2))
@@ -62,7 +71,10 @@
       (@result-global-buffer-size result2))
      (reg-size-fold
       (@result-register-file-size result1)
-      (@result-register-file-size result2)))))
+      (@result-register-file-size result2))
+     (energy-fold
+      (@result-energy result1)
+      (@result-energy result2)))))
 
 ; Analyze an computation pattern.
 (define (analyze-computation pattern)
@@ -73,7 +85,8 @@
      (get-hash-set-from-list (append read write))
      1 #|now we assume any computation uses 1 cycle|#
      0
-     0)))
+     0
+     $energy-MAC)))
 
 ;; Utility functions.
 
@@ -110,10 +123,14 @@
 
 (define make-result list)
 
+(define (caddddr x)
+  (cadddr (cdr x)))
+
 (define @result-data car)
 (define @result-cycles cadr)
 (define @result-global-buffer-size caddr)
 (define @result-register-file-size cadddr)
+(define @result-energy caddddr)
 
 (define empty-data (make-immutable-hash))
 
@@ -121,15 +138,17 @@
 (define (modify-global-buffer-size result buf-size)
   (let [(data (@result-data result))
         (cycles (@result-cycles result))
-        (reg-size (@result-register-file-size result))]
-    (make-result data cycles buf-size reg-size)))
+        (reg-size (@result-register-file-size result))
+        (energy (@result-energy result))]
+    (make-result data cycles buf-size reg-size energy)))
 
 ; Modify the register file size dimension of a result, leaving others unchanged.
 (define (modify-register-file-size result reg-size)
   (let [(data (@result-data result))
         (cycles (@result-cycles result))
-        (buf-size (@result-global-buffer-size result))]
-    (make-result data cycles buf-size reg-size)))
+        (buf-size (@result-global-buffer-size result))
+        (energy (@result-energy result))]
+    (make-result data cycles buf-size reg-size energy)))
 
 ; Get total size of a data collection.
 ; (Data is from a hash set.)
@@ -158,18 +177,4 @@
 (analyze (get simple-annotation))
 (analyze (get complex-annotation))
 
-(pretty-format
- (analyze
-  (get
-   '(for ox_0 0 4 1
-      (for oy_0 0 4 1
-        (@global-buffer
-         (parallel-for ox_1 0 4 1
-           (parallel-for oy_1 0 4 1
-             (for ic 0 3 1
-               (for wx 0 3 1
-                 (for wy 0 3 1
-                   (let ix (+ (+ (* ox_0 4) ox_1) wx)
-                     (let iy (+ (+ (* oy_0 4) oy_1) wy)
-                       (@register-file
-                        (assign (O ix iy) (+ (O ix iy) (* (I ic ix iy) (W ic wx wy))))))))))))))))))
+(pretty-format (analyze (get real-convolution1)))
