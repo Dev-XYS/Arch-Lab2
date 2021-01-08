@@ -80,12 +80,12 @@
 
 ; Program with multiple parallel-for and annotation.
 (define multiple-parallel-with-annotation
- '(for i 0 2 1
-    (@global-buffer
-     (parallel-for j 0 2 1
-       (parallel-for k 0 2 1
-         (@register-file
-          (assign (O i) (+ (O i) (* (I j) (I k))))))))))
+  '(for i 0 2 1
+     (@global-buffer
+      (parallel-for j 0 2 1
+        (parallel-for k 0 2 1
+          (@register-file
+           (assign (O i) (+ (O i) (* (I j) (I k))))))))))
 
 (define naive-convolution
   '(for b 0 B 1

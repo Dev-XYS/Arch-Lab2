@@ -347,20 +347,20 @@
 
 ; Run the tests.
 #;(begin
-  (get single-assignment)
-  (get single-loop)
-  (get nested-loop)
-  (get empty-loop)
-  (get index-dependence)
-  (get simple-let)
-  (get let-with-calculation)
-  (get parallel-for-inner)
-  (get parallel-for-outer)
-  (get MAC-computation)
-  (get simple-annotation)
-  (get full-annotation)
-  (get complex-annotation)
-  (get multiple-parallel-with-annotation))
+    (get single-assignment)
+    (get single-loop)
+    (get nested-loop)
+    (get empty-loop)
+    (get index-dependence)
+    (get simple-let)
+    (get let-with-calculation)
+    (get parallel-for-inner)
+    (get parallel-for-outer)
+    (get MAC-computation)
+    (get simple-annotation)
+    (get full-annotation)
+    (get complex-annotation)
+    (get multiple-parallel-with-annotation))
 
 #;(define test
     (get
