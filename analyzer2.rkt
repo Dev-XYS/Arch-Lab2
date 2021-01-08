@@ -277,3 +277,7 @@
 #;(begin
     (analyze (get single-loop) (make-buf) (make-regs))
     (analyze (get naive-convolution1) (make-buf) (make-regs)))
+
+;; Module.
+
+(provide full-sim)
