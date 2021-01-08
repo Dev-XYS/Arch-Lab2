@@ -87,6 +87,18 @@
          (@register-file
           (assign (O i) (+ (O i) (* (I j) (I k))))))))))
 
+(define naive-convolution
+  '(for b 0 B 1
+     (for k 0 K 1
+       (for c 0 C 1
+         (for y 0 Y 1
+           (for x 0 X 1
+             (for fy 0 FY 1
+               (for fx 0 FX 1
+                 (let ix (+ x fx)
+                   (let iy (+ y fy)
+                     (assign (O b k x y) (+ (O b k x y) (* (I b c ix iy) (W k c fx fy))))))))))))))
+
 (define real-convolution1
   '(for ox_0 0 4 1
      (for oy_0 0 4 1
@@ -96,6 +108,20 @@
             (for ic 0 3 1
               (for wx 0 3 1
                 (for wy 0 3 1
+                  (let ix (+ (+ (* ox_0 4) ox_1) wx)
+                    (let iy (+ (+ (* oy_0 4) oy_1) wy)
+                      (@register-file
+                       (assign (O ix iy) (+ (O ix iy) (* (I ic ix iy) (W ic wx wy))))))))))))))))
+
+(define complex-program
+  '(for ox_0 0 16 1
+     (for oy_0 0 16 1
+       (@global-buffer
+        (parallel-for ox_1 0 4 1
+          (parallel-for oy_1 0 4 1
+            (for ic 0 7 1
+              (for wx 0 7 1
+                (for wy 0 7 1
                   (let ix (+ (+ (* ox_0 4) ox_1) wx)
                     (let iy (+ (+ (* oy_0 4) oy_1) wy)
                       (@register-file

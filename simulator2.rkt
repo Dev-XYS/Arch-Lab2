@@ -2,6 +2,9 @@
 
 (require racket/hash)
 
+; Mutable linked list.
+(require "mlist.rkt")
+
 ; A program is like
 #;(for i 0 16 1
     (for j 0 16 1
@@ -37,22 +40,22 @@
           ((parallel-for? stmt) (get-table-from-parallel-for env stmt))
           ((@global-buffer? stmt) (get-table-from-@global-buffer env stmt))
           ((@register-file? stmt) (get-table-from-@register-file env stmt))
-          (else '()))))
+          (else (empty-mlist)))))
 
 ; Get computation table for an assignment.
 ; Note that assignment is atomic, we only do variable substitution in it without
 ; parsing its sub-structures.
 (define (get-table-from-assignment env asgmt)
   (let* [(asgmt (deep-map (lambda (name) (get-value-from-env env name)) asgmt))
-         (read-hash (get-read-hash-from-expr (@assignor asgmt)))
-         (write-hash (singleton-hash (@assignee asgmt)))]
+         (read-set (get-read-set-from-expr (@assignor asgmt)))
+         (write-set (singleton-set (@assignee asgmt)))]
     (cons #|for the return format|#
-     (list #|for concurrency|#
-      (list #|for the whole list|#
-       (make-cell read-hash
-                  write-hash
+     (mlist #|for the whole list|#
+      (mlist #|for concurrency|#
+       (make-cell read-set
+                  write-set
                   (get-computation-from-expr (@assignor asgmt)))))
-     (hash-force-union read-hash write-hash))))
+     (set-union read-set write-set))))
 
 ; Get computation table for a let statement.
 ; Syntax of 'let':
@@ -78,11 +81,12 @@
                  (data-fst (cdr first))
                  (tab-snd (car rest))
                  (data-snd (cdr rest))]
-             (cons (table-fold-func tab-fst tab-snd)
-                   (hash-force-union data-fst data-snd)))))]
-    (define (for-helper ind)
+             (cons #|for return format|#
+              (table-fold-func tab-fst tab-snd)
+              (set-union data-fst data-snd)))))]
+    (define (for-helper ind)(if (and (eq? index 'y) (= (modulo ind 32) 0)) (displayln ind) (void))
       (if (>= ind limit)
-          (cons #|for return format|# '() empty-data)
+          (cons #|for return format|# (empty-mlist) empty-data)
           (fold-func
            (get-table-from-stmt
             (env-modify-binding env index ind)
@@ -92,7 +96,7 @@
 
 ; Get computation table for a for loop.
 (define (get-table-from-for env for-stmt)
-  (universal-for-helper env for-stmt append))
+  (universal-for-helper env for-stmt mappend))
 
 ; Get computation table for a parallel loop.
 ; (Not implemented yet.)
@@ -100,7 +104,7 @@
   (universal-for-helper
    env pfor-stmt
    (lambda (tab1 tab2)
-     (zip-map append tab1 tab2))))
+     (mzip-map mappend tab1 tab2))))
 
 ; Get computation table for @global-buffer annotation.
 (define (get-table-from-@global-buffer env stmt)
@@ -108,8 +112,8 @@
          (table (car result))
          (data (cdr result))]
     (cons #|for result format|#
-     (cons #|append a global buffer load operation at the beginning of the table|#
-      (list #|for concurrency|#
+     (mlcons #|append a global buffer load operation at the beginning of the table|#
+      (mlist #|for concurrency|#
        `(global-buffer-load ,data))
       table)
      data)))
@@ -120,8 +124,8 @@
          (table (car result))
          (data (cdr result))]
     (cons #|for result format|#
-     (cons #|append a register file load operation at the beginning of the table|#
-      (list #|for concurrency|#
+     (mlcons #|append a register file load operation at the beginning of the table|#
+      (mlist #|for concurrency|#
        `(register-file-load ,data))
       table)
      data)))
@@ -154,28 +158,28 @@
         computation)))
 
 ; Get read list of an expression.
-(define (get-read-hash-from-expr expr)
-  (cond ((+? expr) (get-read-hash-from-+ expr))
-        ((*? expr) (get-read-hash-from-* expr))
+(define (get-read-set-from-expr expr)
+  (cond ((+? expr) (get-read-set-from-+ expr))
+        ((*? expr) (get-read-set-from-* expr))
         ((value? expr) empty-data)
         (else #|suppose that we got an array reference|#
-         (get-read-hash-from-ref expr))))
+         (get-read-set-from-ref expr))))
 
 ; Get read list of an addition expression.
-(define (get-read-hash-from-+ +expr)
-  (hash-force-union
-   (get-read-hash-from-expr (@+fst +expr))
-   (get-read-hash-from-expr (@+snd +expr))))
+(define (get-read-set-from-+ +expr)
+  (set-union
+   (get-read-set-from-expr (@+fst +expr))
+   (get-read-set-from-expr (@+snd +expr))))
 
 ; Get read list of a multiplication expression.
-(define (get-read-hash-from-* *expr)
-  (hash-force-union
-   (get-read-hash-from-expr (@*fst *expr))
-   (get-read-hash-from-expr (@*snd *expr))))
+(define (get-read-set-from-* *expr)
+  (set-union
+   (get-read-set-from-expr (@*fst *expr))
+   (get-read-set-from-expr (@*snd *expr))))
 
 ; Get read list of an array reference.
-(define (get-read-hash-from-ref ref)
-  (singleton-hash ref))
+(define (get-read-set-from-ref ref)
+  (set ref))
 
 ;; Utility functions for statements.
 
@@ -289,10 +293,10 @@
 
 (define @tab-annot-body cadr)
 
-(define empty-data (make-immutable-hash))
+(define empty-data (set))
 
-(define (singleton-hash x)
-  (make-immutable-hash (list (cons x #t))))
+(define (singleton-set x)
+  (set x))
 
 ;; Miscellaneous functions.
 
@@ -307,6 +311,13 @@
     ((null? x) y)
     ((null? y) x)
     (else (cons (f (car x) (car y)) (zip-map f (cdr x) (cdr y))))))
+
+; Used for mutable linked lists.
+(define (mzip-map f x y)
+  (cond
+    ((mnull? x) y)
+    ((mnull? y) x)
+    (else (mlcons (f (mfirst x) (mfirst y)) (mzip-map f (mrest x) (mrest y))))))
 
 (define (hash-force-union hs1 hs2)
   (hash-union
@@ -332,6 +343,8 @@
          x))
    (car (get-table-from-program prog))))
 
+(set! get get-table-from-program)
+
 ; Run the tests.
 (begin
   (get single-assignment)
@@ -348,3 +361,16 @@
   (get full-annotation)
   (get complex-annotation)
   (get multiple-parallel-with-annotation))
+
+#;(define test
+    (get
+     '(for b 0 1 1
+        (for k 0 3 1
+          (for c 0 3 1
+            (for y 0 64 1
+              (for x 0 64 1
+                (for fy 0 3 1
+                  (for fx 0 3 1
+                    (let ix (+ x fx)
+                      (let iy (+ y fy)
+                        (assign (O b k x y) (+ (O b k x y) (* (I b c ix iy) (W k c fx fy)))))))))))))))
