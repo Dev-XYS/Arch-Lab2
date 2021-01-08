@@ -23,7 +23,7 @@
 #;(load-register-file (Data*))
 #;(computation Computation)
 
-;; Functions of name 'get-table-from-*' return a list.
+;; Functions of name 'get-table-from-*' return a pair.
 ;; The first element of the list is the computation table.
 ;; The second is a list of all data involved.
 
@@ -84,7 +84,7 @@
              (cons #|for return format|#
               (table-fold-func tab-fst tab-snd)
               (set-union data-fst data-snd)))))]
-    (define (for-helper ind)(if (and (eq? index 'y) (= (modulo ind 32) 0)) (displayln ind) (void))
+    (define (for-helper ind)
       (if (>= ind limit)
           (cons #|for return format|# (empty-mlist) empty-data)
           (fold-func
@@ -346,7 +346,7 @@
 (set! get get-table-from-program)
 
 ; Run the tests.
-(begin
+#;(begin
   (get single-assignment)
   (get single-loop)
   (get nested-loop)

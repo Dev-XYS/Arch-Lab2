@@ -99,6 +99,34 @@
                    (let iy (+ y fy)
                      (assign (O b k x y) (+ (O b k x y) (* (I b c ix iy) (W k c fx fy))))))))))))))
 
+(define naive-convolution1
+  '(for b 0 1 1
+     (for k 0 3 1
+       (for c 0 3 1
+         (for y 0 64 1
+           (@global-buffer
+            (for x 0 64 1
+              (parallel-for fy 0 3 1
+                (parallel-for fx 0 3 1
+                  (@register-file
+                   (let ix (+ x fx)
+                     (let iy (+ y fy)
+                       (assign (O b k x y) (+ (O b k x y) (* (I b c ix iy) (W k c fx fy))))))))))))))))
+
+(define naive-convolution2
+  '(for b 0 1 1
+     (for k 0 3 1
+       (for c 0 3 1
+         (for y 0 128 1
+           (@global-buffer
+            (for x 0 128 1
+              (parallel-for fy 0 3 1
+                (parallel-for fx 0 3 1
+                  (@register-file
+                   (let ix (+ x fx)
+                     (let iy (+ y fy)
+                       (assign (O b k x y) (+ (O b k x y) (* (I b c ix iy) (W k c fx fy))))))))))))))))
+
 (define real-convolution1
   '(for ox_0 0 4 1
      (for oy_0 0 4 1
